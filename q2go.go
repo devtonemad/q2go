@@ -7,31 +7,55 @@ import (
 
 	"github.com/gorilla/mux"
 )
-/* test */
-var queue = list.New()
+
+var queue *list.List
 
 func main() {
-	router := mux.NewRouter()
-	router.HandleFunc("/pop", popnextmessage).Methods("GET")
-	router.HandleFunc("/push", pushmessage).Methods("POST")
+	router := getRouter()
+	queue = getQueue()
+	initRouteHandlers(router)
 	http.ListenAndServe(":8080", router)
+
 }
 
-func popnextmessage(writer http.ResponseWriter, request *http.Request) {
-	if queue.Len() > 0 {
-		e := queue.Front()
-		m := e.Value.(string)
-		fmt.Printf("message removed from queue: %s \n", m)
-		queue.Remove(e)
-		writer.Write([]byte(m))
+func initRouteHandlers(r *mux.Router) {
+	r.HandleFunc("/pop", popNextMessage).Methods("GET").Name("pop")
+	r.HandleFunc("/push", pushMessage).Methods("POST").Name("push")
+}
+
+func getRouter() *mux.Router {
+	return mux.NewRouter()
+}
+
+func getQueue() *list.List {
+	return list.New()
+}
+
+func popNextMessage(writer http.ResponseWriter, request *http.Request) {
+	message := popNextMessageFromQueue(queue)
+	writer.Write([]byte(message))
+}
+
+func popNextMessageFromQueue(q *list.List) string {
+	var message string
+	if q.Len() > 0 {
+		e := q.Front()
+		message = e.Value.(string)
+		fmt.Printf("message removed from queue: %s \n", message)
+		q.Remove(e)
 	} else {
 		fmt.Printf("no more messages in queue \n")
 	}
+	return message
 }
 
-func pushmessage(writer http.ResponseWriter, request *http.Request) {
+func pushMessage(writer http.ResponseWriter, request *http.Request) {
 	request.ParseForm()
 	m := request.FormValue("message")
-	fmt.Printf("message pushed to queue   : %s \n", m)
-	queue.PushBack(m)
+	pushMessageToQueue(queue, m)
+}
+
+func pushMessageToQueue(q *list.List, msg string) {
+	q.PushBack(msg)
+	fmt.Printf("message pushed to queue   : %s \n", msg)
 }
