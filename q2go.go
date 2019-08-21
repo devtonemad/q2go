@@ -3,7 +3,9 @@ package main
 import (
 	"container/list"
 	"fmt"
+	"math/rand"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -52,10 +54,13 @@ func popNextMessageFromQueue(q *list.List) string {
 func pushMessage(writer http.ResponseWriter, request *http.Request) {
 	request.ParseForm()
 	m := request.FormValue("message")
-	pushMessageToQueue(queue, m)
+	go pushMessageToQueue(queue, m)
 }
 
 func pushMessageToQueue(q *list.List, msg string) {
 	q.PushBack(msg)
+	//some time consuming process
+	rtd := time.Duration(rand.Intn(500))
+	time.Sleep(time.Millisecond * rtd)
 	fmt.Printf("message pushed to queue   : %s \n", msg)
 }
