@@ -10,36 +10,65 @@ import (
 	"github.com/gorilla/mux"
 )
 
-var queue *list.List
+var queueMap map[string]*list.List
+var router *mux.Router
 
 func main() {
-	router := getRouter()
-	queue = getQueue()
-	initRouteHandlers(router)
+	initialize()
 	http.ListenAndServe(":8080", router)
-
 }
 
-func initRouteHandlers(r *mux.Router) {
-	r.HandleFunc("/pop", popNextMessage).Methods("GET").Name("pop")
-	r.HandleFunc("/push", pushMessage).Methods("POST").Name("push")
+func initialize() {
+	router = mux.NewRouter()
+	queueMap = make(map[string]*list.List)
+	router.HandleFunc("/queue", createQueueHandler).Methods("POST").Name("createQueue")
+	router.HandleFunc("/queue/{qid}/push", pushMessageHandler).Methods("POST").Name("push")
+	router.HandleFunc("/queue/{qid}/pop", popMessageHandler).Methods("GET").Name("pop")
 }
 
-func getRouter() *mux.Router {
-	return mux.NewRouter()
+func createQueueHandler(writer http.ResponseWriter, request *http.Request) {
+	request.ParseForm()
+	qname := request.FormValue("qname")
+	createQueue(queueMap, qname)
+	writer.Write([]byte(qname))
 }
 
-func getQueue() *list.List {
-	return list.New()
+func pushMessageHandler(writer http.ResponseWriter, request *http.Request) {
+	v := mux.Vars(request)
+	qname := v["qid"]
+	request.ParseForm()
+	m := request.FormValue("message")
+	q := getQueue(queueMap, qname)
+	go pushMessage(q, m)
 }
 
-func popNextMessage(writer http.ResponseWriter, request *http.Request) {
-	message := popNextMessageFromQueue(queue)
+func popMessageHandler(writer http.ResponseWriter, request *http.Request) {
+	v := mux.Vars(request)
+	qname := v["qid"]
+	message := popMessage(qname)
 	writer.Write([]byte(message))
 }
 
-func popNextMessageFromQueue(q *list.List) string {
+func createQueue(qm map[string]*list.List, qname string) *list.List {
+	//check if name already exists
+	q := list.New()
+	qm[qname] = q
+	return q
+}
+
+func pushMessage(q *list.List, msg string) {
+	q.PushBack(msg)
+	//some time consuming process
+	rtd := time.Duration(rand.Intn(500))
+	time.Sleep(time.Millisecond * rtd)
+	fmt.Printf("message pushed to queue   : %s \n", msg)
+}
+
+func popMessage(qname string) string {
+
 	var message string
+	q := getQueue(queueMap, qname)
+
 	if q.Len() > 0 {
 		e := q.Front()
 		message = e.Value.(string)
@@ -48,19 +77,14 @@ func popNextMessageFromQueue(q *list.List) string {
 	} else {
 		fmt.Printf("no more messages in queue \n")
 	}
+
 	return message
 }
 
-func pushMessage(writer http.ResponseWriter, request *http.Request) {
-	request.ParseForm()
-	m := request.FormValue("message")
-	go pushMessageToQueue(queue, m)
-}
-
-func pushMessageToQueue(q *list.List, msg string) {
-	q.PushBack(msg)
-	//some time consuming process
-	rtd := time.Duration(rand.Intn(500))
-	time.Sleep(time.Millisecond * rtd)
-	fmt.Printf("message pushed to queue   : %s \n", msg)
+func getQueue(qm map[string]*list.List, qname string) *list.List {
+	q := qm[qname]
+	if q == nil {
+		fmt.Printf("queue with the name %s does not exist \n", qname)
+	}
+	return q
 }
