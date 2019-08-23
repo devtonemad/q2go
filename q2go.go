@@ -21,32 +21,52 @@ func main() {
 func initialize() {
 	router = mux.NewRouter()
 	queueMap = make(map[string]*list.List)
-	router.HandleFunc("/queue", createQueueHandler).Methods("POST").Name("createQueue")
-	router.HandleFunc("/queue/{qid}/push", pushMessageHandler).Methods("POST").Name("push")
-	router.HandleFunc("/queue/{qid}/pop", popMessageHandler).Methods("GET").Name("pop")
+	router.HandleFunc("/queue", queuePostHandler).Methods("POST").Name("queuePost")
+	router.HandleFunc("/queue/{qid}", queueDeleteHandler).Methods("DELETE").Name("queueDelete")
+	router.HandleFunc("/queue/{qid}/message", messagePostHandler).Methods("POST").Name("messagePost")
+	router.HandleFunc("/queue/{qid}/message", messageGetHandler).Methods("GET").Name("messageGet")
+
 }
 
-func createQueueHandler(writer http.ResponseWriter, request *http.Request) {
+func queuePostHandler(writer http.ResponseWriter, request *http.Request) {
 	request.ParseForm()
 	qname := request.FormValue("qname")
 	createQueue(queueMap, qname)
 	writer.Write([]byte(qname))
 }
 
-func pushMessageHandler(writer http.ResponseWriter, request *http.Request) {
+func messagePostHandler(writer http.ResponseWriter, request *http.Request) {
 	v := mux.Vars(request)
 	qname := v["qid"]
 	request.ParseForm()
 	m := request.FormValue("message")
 	q := getQueue(queueMap, qname)
-	go pushMessage(q, m)
+	if q == nil {
+		writer.WriteHeader(404)
+	} else {
+		go pushMessage(q, m)
+	}
 }
 
-func popMessageHandler(writer http.ResponseWriter, request *http.Request) {
+func messageGetHandler(writer http.ResponseWriter, request *http.Request) {
 	v := mux.Vars(request)
 	qname := v["qid"]
-	message := popMessage(qname)
-	writer.Write([]byte(message))
+	message, err := popMessage(qname)
+	if err != nil {
+		writer.WriteHeader(404)
+	} else {
+		writer.Write([]byte(message))
+	}
+}
+
+func queueDeleteHandler(writer http.ResponseWriter, request *http.Request) {
+	v := mux.Vars(request)
+	qname := v["qid"]
+	q := getQueue(queueMap, qname)
+	if q == nil {
+		writer.WriteHeader(404)
+	}
+	delete(queueMap, qname)
 }
 
 func createQueue(qm map[string]*list.List, qname string) *list.List {
@@ -64,10 +84,13 @@ func pushMessage(q *list.List, msg string) {
 	fmt.Printf("message pushed to queue   : %s \n", msg)
 }
 
-func popMessage(qname string) string {
+func popMessage(qname string) (string, error) {
 
 	var message string
 	q := getQueue(queueMap, qname)
+	if q == nil {
+		return "", fmt.Errorf("queue with the given name %s not found ", qname)
+	}
 
 	if q.Len() > 0 {
 		e := q.Front()
@@ -78,7 +101,8 @@ func popMessage(qname string) string {
 		fmt.Printf("no more messages in queue \n")
 	}
 
-	return message
+	return message, nil
+
 }
 
 func getQueue(qm map[string]*list.List, qname string) *list.List {
