@@ -14,17 +14,17 @@ func TestInitialize(t *testing.T) {
 		t.Errorf("No router created")
 	}
 
-	route := router.Get("pop")
+	route := router.Get("messageGet")
 	if route == nil {
 		t.Errorf("No route created for pop")
 	}
 
-	route = router.Get("push")
+	route = router.Get("messagePost")
 	if route == nil {
 		t.Errorf("No route created for push")
 	}
 
-	route = router.Get("createQueue")
+	route = router.Get("queuePost")
 	if route == nil {
 		t.Errorf("No route created for createQueue")
 	}
@@ -70,19 +70,31 @@ func TestPushMessage(t *testing.T) {
 	if q.Len() == 0 {
 		t.Errorf("No message pushed in queue")
 	}
+
 }
 
 func TestPopMessage(t *testing.T) {
 
 	initialize()
 	m := "test message"
-	qname := "tq"
-	q := createQueue(queueMap, qname)
+	qnamea := "tq"
+	q := createQueue(queueMap, qnamea)
 	pushMessage(q, m)
 
-	mg := popMessage(qname)
-	if mg != "test message" {
+	mga, _ := popMessage(qnamea)
+	if mga != "test message" {
 		t.Errorf("No message popped from queue")
+	}
+
+	mga, _ = popMessage(qnamea)
+	if mga != "" {
+		t.Errorf("Message found but should not")
+	}
+
+	qnameb := "notcreatedqueue"
+	_, err := popMessage(qnameb)
+	if err == nil {
+		t.Errorf("Error should not occur because queue %s does not exist", qnameb)
 	}
 
 }
