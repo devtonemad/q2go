@@ -1,5 +1,5 @@
 # q2go
-Queue server with Rest access written in Go.
+minimalistic queue server with REST access written in Golang
 
 ### create a queue with name "queue123"
 curl -d "qname=queue123" -X POST "http://localhost:8080/queue"
