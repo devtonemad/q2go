@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"net/http"
 	"time"
-
+        "io"
 	"github.com/gorilla/mux"
 )
 
@@ -38,8 +38,14 @@ func queuePostHandler(writer http.ResponseWriter, request *http.Request) {
 func messagePostHandler(writer http.ResponseWriter, request *http.Request) {
 	v := mux.Vars(request)
 	qname := v["qid"]
-	request.ParseForm()
-	m := request.FormValue("message")
+	bodyBytes, err := io.ReadAll(request.Body)
+	if err != nil {
+		http.Error(writer, "Error Reading Request Body", http.StatusInternalServerError)
+		return
+	}
+	m := string(bodyBytes)
+	//request.ParseForm()
+	//m := request.FormValue("message")
 	q := getQueue(queueMap, qname)
 	if q == nil {
 		writer.WriteHeader(404)
