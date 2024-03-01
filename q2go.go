@@ -3,10 +3,11 @@ package main
 import (
 	"container/list"
 	"fmt"
+	"io"
 	"math/rand"
 	"net/http"
 	"time"
-        "io"
+
 	"github.com/gorilla/mux"
 )
 
