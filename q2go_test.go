@@ -66,7 +66,7 @@ func TestPushMessage(t *testing.T) {
 	m := "test message"
 	qname := "tq"
 	q := createQueue(queueMap, qname)
-	pushMessage(q, m)
+	q.Push(m)
 	if q.Len() == 0 {
 		t.Errorf("No message pushed in queue")
 	}
@@ -79,7 +79,7 @@ func TestPopMessage(t *testing.T) {
 	m := "test message"
 	qnamea := "tq"
 	q := createQueue(queueMap, qnamea)
-	pushMessage(q, m)
+	q.Push(m)
 
 	mga, _ := popMessage(qnamea)
 	if mga != "test message" {

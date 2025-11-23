@@ -11,7 +11,40 @@ import (
 	"github.com/gorilla/mux"
 )
 
-var queueMap map[string]*list.List
+type Queue struct {
+	mu sync.Mutex
+	l  *list.List
+}
+
+func NewQueue() *Queue {
+	return &Queue{l: list.New()}
+}
+
+func (q *Queue) Push(msg string) {
+	q.mu.Lock()
+	q.l.PushBack(msg)
+	q.mu.Unlock()
+}
+
+func (q *Queue) Pop() (string, bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.l.Len() == 0 {
+		return "", false
+	}
+	e := q.l.Front()
+	msg := e.Value.(string)
+	q.l.Remove(e)
+	return msg, true
+}
+
+func (q *Queue) Len() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.l.Len()
+}
+
+var queueMap map[string]*Queue
 var router *mux.Router
 var queueMu sync.RWMutex
 
@@ -23,7 +56,7 @@ func main() {
 
 func initialize() {
 	router = mux.NewRouter()
-	queueMap = make(map[string]*list.List)
+	queueMap = make(map[string]*Queue)
 	router.HandleFunc("/queue", queuePostHandler).Methods("POST").Name("queuePost")
 	router.HandleFunc("/queue/{qid}", queueDeleteHandler).Methods("DELETE").Name("queueDelete")
 	router.HandleFunc("/queue/{qid}/message", messagePostHandler).Methods("POST").Name("messagePost")
@@ -55,7 +88,7 @@ func messagePostHandler(writer http.ResponseWriter, request *http.Request) {
 	if q == nil {
 		writer.WriteHeader(404)
 	} else {
-		pushMessage(q, m)
+		q.Push(m)
 	}
 }
 
@@ -83,45 +116,34 @@ func queueDeleteHandler(writer http.ResponseWriter, request *http.Request) {
 	queueMu.Unlock()
 }
 
-func createQueue(qm map[string]*list.List, qname string) *list.List {
+func createQueue(qm map[string]*Queue, qname string) *Queue {
 	queueMu.Lock()
 	defer queueMu.Unlock()
 	if existing := qm[qname]; existing != nil {
 		return existing
 	}
-	q := list.New()
+	q := NewQueue()
 	qm[qname] = q
 	return q
 }
 
-func pushMessage(q *list.List, msg string) {
-	queueMu.Lock()
-	q.PushBack(msg)
-	queueMu.Unlock()
-}
+// push/pop are methods on Queue now
 
 func popMessage(qname string) (string, error) {
-
-	var message string
-	queueMu.Lock()
-	defer queueMu.Unlock()
 	q := getQueue(queueMap, qname)
 	if q == nil {
 		return "", fmt.Errorf("queue with the given name %s not found ", qname)
 	}
-
-	if q.Len() > 0 {
-		e := q.Front()
-		message = e.Value.(string)
-		q.Remove(e)
+	if msg, ok := q.Pop(); ok {
+		return msg, nil
 	}
-
-	return message, nil
-
+	return "", nil
 }
 
-func getQueue(qm map[string]*list.List, qname string) *list.List {
+func getQueue(qm map[string]*Queue, qname string) *Queue {
+	queueMu.RLock()
 	q := qm[qname]
+	queueMu.RUnlock()
 	if q == nil {
 		fmt.Printf("queue with the name %s does not exist \n", qname)
 	}
