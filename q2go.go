@@ -51,8 +51,6 @@ func messagePostHandler(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 	m := string(bodyBytes)
-	//request.ParseForm()
-	//m := request.FormValue("message")
 	q := getQueue(queueMap, qname)
 	if q == nil {
 		writer.WriteHeader(404)
@@ -100,10 +98,6 @@ func pushMessage(q *list.List, msg string) {
 	queueMu.Lock()
 	q.PushBack(msg)
 	queueMu.Unlock()
-	//some time consuming process
-	//rtd := time.Duration(rand.Intn(500))
-	//time.Sleep(time.Millisecond * rtd)
-	//fmt.Printf("message pushed to queue   : %s \n", msg)
 }
 
 func popMessage(qname string) (string, error) {
@@ -119,10 +113,7 @@ func popMessage(qname string) (string, error) {
 	if q.Len() > 0 {
 		e := q.Front()
 		message = e.Value.(string)
-		//fmt.Printf("message removed from queue: %s \n", message)
 		q.Remove(e)
-	} else {
-		//fmt.Printf("no more messages in queue \n")
 	}
 
 	return message, nil
