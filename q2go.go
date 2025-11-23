@@ -4,19 +4,21 @@ import (
 	"container/list"
 	"fmt"
 	"io"
-	"math/rand"
+	"log"
 	"net/http"
-	"time"
+	"sync"
 
 	"github.com/gorilla/mux"
 )
 
 var queueMap map[string]*list.List
 var router *mux.Router
+var queueMu sync.RWMutex
 
 func main() {
 	initialize()
-	http.ListenAndServe(":8080", router)
+	log.Println("q2go started on :8077")
+	log.Fatal(http.ListenAndServe(":8077", router))
 }
 
 func initialize() {
@@ -32,6 +34,10 @@ func initialize() {
 func queuePostHandler(writer http.ResponseWriter, request *http.Request) {
 	request.ParseForm()
 	qname := request.FormValue("qname")
+	if qname == "" {
+		http.Error(writer, "qname required", http.StatusBadRequest)
+		return
+	}
 	createQueue(queueMap, qname)
 	writer.Write([]byte(qname))
 }
@@ -51,7 +57,7 @@ func messagePostHandler(writer http.ResponseWriter, request *http.Request) {
 	if q == nil {
 		writer.WriteHeader(404)
 	} else {
-		go pushMessage(q, m)
+		pushMessage(q, m)
 	}
 }
 
@@ -72,28 +78,39 @@ func queueDeleteHandler(writer http.ResponseWriter, request *http.Request) {
 	q := getQueue(queueMap, qname)
 	if q == nil {
 		writer.WriteHeader(404)
+		return
 	}
+	queueMu.Lock()
 	delete(queueMap, qname)
+	queueMu.Unlock()
 }
 
 func createQueue(qm map[string]*list.List, qname string) *list.List {
-	//check if name already exists
+	queueMu.Lock()
+	defer queueMu.Unlock()
+	if existing := qm[qname]; existing != nil {
+		return existing
+	}
 	q := list.New()
 	qm[qname] = q
 	return q
 }
 
 func pushMessage(q *list.List, msg string) {
+	queueMu.Lock()
 	q.PushBack(msg)
+	queueMu.Unlock()
 	//some time consuming process
-	rtd := time.Duration(rand.Intn(500))
-	time.Sleep(time.Millisecond * rtd)
-	fmt.Printf("message pushed to queue   : %s \n", msg)
+	//rtd := time.Duration(rand.Intn(500))
+	//time.Sleep(time.Millisecond * rtd)
+	//fmt.Printf("message pushed to queue   : %s \n", msg)
 }
 
 func popMessage(qname string) (string, error) {
 
 	var message string
+	queueMu.Lock()
+	defer queueMu.Unlock()
 	q := getQueue(queueMap, qname)
 	if q == nil {
 		return "", fmt.Errorf("queue with the given name %s not found ", qname)
@@ -102,10 +119,10 @@ func popMessage(qname string) (string, error) {
 	if q.Len() > 0 {
 		e := q.Front()
 		message = e.Value.(string)
-		fmt.Printf("message removed from queue: %s \n", message)
+		//fmt.Printf("message removed from queue: %s \n", message)
 		q.Remove(e)
 	} else {
-		fmt.Printf("no more messages in queue \n")
+		//fmt.Printf("no more messages in queue \n")
 	}
 
 	return message, nil
