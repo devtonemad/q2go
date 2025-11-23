@@ -2,6 +2,7 @@ package main
 
 import (
 	"container/list"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -61,6 +62,7 @@ func initialize() {
 	router.HandleFunc("/queue/{qid}", queueDeleteHandler).Methods("DELETE").Name("queueDelete")
 	router.HandleFunc("/queue/{qid}/message", messagePostHandler).Methods("POST").Name("messagePost")
 	router.HandleFunc("/queue/{qid}/message", messageGetHandler).Methods("GET").Name("messageGet")
+	router.HandleFunc("/status", statusHandler).Methods("GET").Name("status")
 
 }
 
@@ -148,4 +150,33 @@ func getQueue(qm map[string]*Queue, qname string) *Queue {
 		fmt.Printf("queue with the name %s does not exist \n", qname)
 	}
 	return q
+}
+
+func statusHandler(w http.ResponseWriter, r *http.Request) {
+	type statusResp struct {
+		Queues   int `json:"queues"`
+		Messages int `json:"messages"`
+	}
+
+	queueMu.RLock()
+	queues := len(queueMap)
+	// make a copy of map values to avoid holding RLock while calling Len()
+	qs := make([]*Queue, 0, queues)
+	for _, q := range queueMap {
+		qs = append(qs, q)
+	}
+	queueMu.RUnlock()
+
+	total := 0
+	for _, q := range qs {
+		total += q.Len()
+	}
+
+	resp := statusResp{Queues: queues, Messages: total}
+	w.Header().Set("Content-Type", "application/json")
+	encoder := json.NewEncoder(w)
+	if err := encoder.Encode(resp); err != nil {
+		http.Error(w, "failed to encode status", http.StatusInternalServerError)
+		return
+	}
 }
