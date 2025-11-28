@@ -154,25 +154,36 @@ func getQueue(qm map[string]*Queue, qname string) *Queue {
 
 func statusHandler(w http.ResponseWriter, r *http.Request) {
 	type statusResp struct {
-		Queues   int `json:"queues"`
-		Messages int `json:"messages"`
+		Queues   int            `json:"queues"`
+		Messages int            `json:"messages"`
+		Detail   map[string]int `json:"queues_detail,omitempty"`
 	}
+	// detailed view (per-queue sizes) is always returned for /status
+	detailMap := make(map[string]int)
 
 	queueMu.RLock()
 	queues := len(queueMap)
-	// make a copy of map values to avoid holding RLock while calling Len()
-	qs := make([]*Queue, 0, queues)
-	for _, q := range queueMap {
-		qs = append(qs, q)
+	// copy names and pointers to avoid holding lock while calling Len()
+	items := make([]struct {
+		name string
+		q    *Queue
+	}, 0, queues)
+	for name, q := range queueMap {
+		items = append(items, struct {
+			name string
+			q    *Queue
+		}{name: name, q: q})
 	}
 	queueMu.RUnlock()
 
 	total := 0
-	for _, q := range qs {
-		total += q.Len()
+	for _, it := range items {
+		l := it.q.Len()
+		total += l
+		detailMap[it.name] = l
 	}
 
-	resp := statusResp{Queues: queues, Messages: total}
+	resp := statusResp{Queues: queues, Messages: total, Detail: detailMap}
 	w.Header().Set("Content-Type", "application/json")
 	encoder := json.NewEncoder(w)
 	if err := encoder.Encode(resp); err != nil {
